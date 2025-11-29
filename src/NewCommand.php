@@ -132,7 +132,7 @@ class NewCommand extends Command
         if (!file_exists($configPath)) {
             // Create default config
             $defaultConfig = ['reserved_ports' => []];
-            $this->ensureDirectoryExists(dirname($configPath));
+            $this->createDirectoryIfNotExists(dirname($configPath));
             file_put_contents(
                 $configPath,
                 Yaml::dump($defaultConfig, 2, 2)
@@ -234,7 +234,7 @@ class NewCommand extends Command
     protected function saveAllocations(array $allocations): void
     {
         $allocationsPath = get_allocations_path();
-        $this->ensureDirectoryExists(dirname($allocationsPath));
+        $this->createDirectoryIfNotExists(dirname($allocationsPath));
 
         $json = json_encode($allocations, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
 
@@ -459,7 +459,7 @@ class NewCommand extends Command
         rename($tempPath, $envPath);
     }
 
-    protected function ensureDirectoryExists(string $path): void
+    protected function createDirectoryIfNotExists(string $path): void
     {
         if (!is_dir($path)) {
             mkdir($path, 0755, true);
@@ -475,8 +475,7 @@ class NewCommand extends Command
         if (!$process->isSuccessful()) {
             $exitCode = $process->getExitCode();
             $output->writeln("<comment>Warning: install.sh exited with code {$exitCode}</comment>");
-            $output->writeln("<comment>You may need to run it manually:</comment>");
-            $output->writeln("<comment>  cd {$workingDir} && bash bin/install.sh</comment>");
+            $output->writeln("You may need to run it manually:\n  cd {$workingDir}\n  bash bin/install.sh");
         }
     }
 }
