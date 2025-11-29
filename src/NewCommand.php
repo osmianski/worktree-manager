@@ -2,6 +2,7 @@
 
 namespace Osmianski\WorktreeManager;
 
+use Exception;
 use Osmianski\WorktreeManager\Exception\WorktreeException;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -15,7 +16,7 @@ class NewCommand extends Command
     {
         $this
             ->setName('new')
-            ->setDescription('Create a new worktree with allocated ports')
+            ->setDescription('Create new worktree and environment for it')
             ->addOption('branch', 'b', InputOption::VALUE_REQUIRED, 'Branch to checkout in worktree', 'main')
             ->addOption('validate-ports', null, InputOption::VALUE_NONE, 'Validate that ports are actually available via socket check');
     }
@@ -136,7 +137,8 @@ class NewCommand extends Command
 
         try {
             $config = Yaml::parseFile($configPath);
-        } catch (\Exception $e) {
+        }
+        catch (Exception $e) {
             throw new WorktreeException(sprintf(
                 "Invalid YAML syntax in worktrees.yml: %s",
                 $e->getMessage()
@@ -165,7 +167,8 @@ class NewCommand extends Command
         try {
             $config = Yaml::parseFile($configPath);
             return $config ?? ['reserved_ports' => []];
-        } catch (\Exception $e) {
+        }
+        catch (Exception $e) {
             throw new WorktreeException(sprintf(
                 "Invalid YAML syntax in config.yml: %s",
                 $e->getMessage()
@@ -295,7 +298,8 @@ class NewCommand extends Command
         foreach ($globalConfig['reserved_ports'] as $item) {
             if (is_int($item)) {
                 $ports[] = $item;
-            } elseif (is_string($item) && str_contains($item, '-')) {
+            }
+            elseif (is_string($item) && str_contains($item, '-')) {
                 // Expand range like "5000-5010"
                 $parts = explode('-', $item);
                 if (count($parts) === 2) {
@@ -303,7 +307,8 @@ class NewCommand extends Command
                     $end = (int)$parts[1];
                     $ports = array_merge($ports, range($start, $end));
                 }
-            } elseif (is_string($item)) {
+            }
+            elseif (is_string($item)) {
                 // Single port as string
                 $ports[] = (int)$item;
             }

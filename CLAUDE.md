@@ -8,42 +8,39 @@ This is a PHP CLI tool for managing Git worktrees with automated port allocation
 
 ## Development Commands
 
-**Run the CLI tool:**
-```bash
-php bin/worktree <command>
-```
+For local development, a symlink is created:
 
-**Install dependencies:**
 ```bash
+cd ~
+git clone git@github.com:osmianski/worktree-manager.git
 composer install
+ln -s $HOME/worktree-manager/bin/worktree $HOME/.local/bin/worktree
 ```
 
-**Main command:**
+Then use it in the target project directory:
+
 ```bash
-php bin/worktree new
+worktree new
 ```
 
 ## Architecture
 
-**Entry Point:** `bin/worktree`
-- Symfony Console application bootstrapper
-- Application name: "Worktree Manager"
-- Version: 0.1.0
+- **Entry Point:** `bin/worktree` - Symfony Console application bootstrapper
+- **Commands** are located in `src/` directory, each command extends `Symfony\Component\Console\Command\Command`
 
-**Command Structure:**
-- Commands are located in `src/` directory
-- Each command extends `Symfony\Component\Console\Command\Command`
-- Namespace: `Osmianski\WorktreeManager`
-- PSR-4 autoloading configured in composer.json
+## PHP
 
-**Currently Implemented:**
-- `NewCommand` (`new` command): Creates a new worktree with allocated ports
-  - Located at: `src/NewCommand.php`
-  - Status: Skeleton implementation (TODO: port allocation and worktree creation logic)
+- Always add import statements for classes, even for those without namespace. So in code it should read `RuntimeException`, not `\RuntimeException`.
+- Always start `elseif`, `else`, `catch` and other language constructs that follow a closing `}` from a new line instead of placing them on the same line as `}`
 
-## Key Implementation Details
+## Composer
 
 - PHP 8.1+ required
 - Uses Symfony Console (^6.0|^7.0) for CLI framework
 - Uses Symfony YAML (^6.0|^7.0) for configuration
 - PSR-4 autoloading with namespace `Osmianski\WorktreeManager\`
+
+## Markdown
+
+- Before a Markdown list, always add an empty line.
+- Right after a heading, always add an empty line.

@@ -2,6 +2,8 @@
 
 namespace Osmianski\WorktreeManager\Exception;
 
-class WorktreeException extends \RuntimeException
+use RuntimeException;
+
+class WorktreeException extends RuntimeException
 {
 }
