@@ -1,0 +1,1 @@
+PHP CLI tool for managing Git worktree environments with automated port allocation.
