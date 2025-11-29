@@ -87,25 +87,9 @@ class NewCommand extends Command
         }
     }
 
-    protected function getHomeDirectory(): string
-    {
-        $home = $_SERVER['HOME'] ?? getenv('HOME');
-
-        if (!$home) {
-            throw new WorktreeException('Could not determine home directory');
-        }
-
-        return $home;
-    }
-
     protected function getConfigPath(): string
     {
-        return $this->getHomeDirectory() . '/.config/worktree-manager/config.yml';
-    }
-
-    protected function getAllocationsPath(): string
-    {
-        return $this->getHomeDirectory() . '/.local/share/worktree-manager/allocations.json';
+        return get_home_directory() . '/.config/worktree-manager/config.yml';
     }
 
     protected function loadProjectConfig(string $dir): array
@@ -228,7 +212,7 @@ class NewCommand extends Command
 
     protected function loadAllocations(): array
     {
-        $allocationsPath = $this->getAllocationsPath();
+        $allocationsPath = get_allocations_path();
 
         if (!file_exists($allocationsPath)) {
             return ['allocations' => []];
@@ -249,7 +233,7 @@ class NewCommand extends Command
 
     protected function saveAllocations(array $allocations): void
     {
-        $allocationsPath = $this->getAllocationsPath();
+        $allocationsPath = get_allocations_path();
         $this->ensureDirectoryExists(dirname($allocationsPath));
 
         $json = json_encode($allocations, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);

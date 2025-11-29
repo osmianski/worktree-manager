@@ -41,3 +41,19 @@ function ensure_project_dir_is_git_repository(string $path): void
         ));
     }
 }
+
+function get_home_directory(): string
+{
+    $home = $_SERVER['HOME'] ?? getenv('HOME');
+
+    if (!$home) {
+        throw new WorktreeException('Could not determine home directory');
+    }
+
+    return $home;
+}
+
+function get_allocations_path(): string
+{
+    return get_home_directory() . '/.local/share/worktree-manager/allocations.json';
+}
