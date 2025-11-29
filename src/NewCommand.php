@@ -28,63 +28,38 @@ class NewCommand extends Command
             $branch = $input->getOption('branch');
             $validatePorts = $input->getOption('validate-ports');
 
-            // Step 1: Validate git repository
             $output->writeln('<info>Checking git repository...</info>');
-            if (!$this->isGitRepository($currentDir)) {
-                throw new WorktreeException(sprintf(
-                    "Not a git repository: %s\nThe current directory must be a git repository to create worktrees.",
-                    $currentDir
-                ));
-            }
+            $this->ensureProjectDirIsGitRepository($currentDir);
+            $this->ensureBranchExists($branch);
 
-            // Step 2: Validate branch exists
-            $this->validateBranch($branch);
-
-            // Step 3: Load worktrees.yml
             $output->writeln('<info>Loading configuration...</info>');
             $worktreesConfig = $this->loadWorktreesConfig($currentDir);
-
-            // Step 4: Generate next worktree name
-            $worktreeName = $this->generateNextWorktreeName($currentDir);
-            $worktreePath = dirname($currentDir) . '/' . $worktreeName;
-            $output->writeln("<info>Next worktree: {$worktreeName}</info>");
-
-            // Step 5: Check if worktree already exists
-            if (file_exists($worktreePath)) {
-                throw new WorktreeException(sprintf(
-                    "Worktree already exists at %s\nPlease remove the existing worktree first:\n  git worktree remove %s",
-                    $worktreePath,
-                    $worktreePath
-                ));
-            }
-
-            // Step 6: Load global config and allocations
             $globalConfig = $this->loadGlobalConfig();
             $allocations = $this->loadAllocations();
 
-            // Step 7: Allocate ports
+            $worktreeName = $this->generateNextWorktreeName($currentDir);
+            $worktreePath = dirname($currentDir) . '/' . $worktreeName;
+            $output->writeln("<info>Next worktree: {$worktreeName}</info>");
+            $this->ensureWorktreeDoesNotExist($worktreePath);
+
             $output->writeln('<info>Allocating ports...</info>');
             $portAllocations = $this->allocatePorts($worktreesConfig, $allocations, $globalConfig, $validatePorts);
 
-            // Display allocated ports
             foreach ($portAllocations as $var => $port) {
                 $output->writeln("  {$var}: {$port}");
             }
 
-            // Step 8: Create worktree
             $output->writeln('<info>Creating git worktree...</info>');
             $this->createWorktree($currentDir, $worktreePath, $branch);
 
-            // Step 9: Generate .env file
             $output->writeln('<info>Generating .env file...</info>');
             $this->generateEnvFile($worktreePath, $portAllocations);
 
-            // Step 10: Save allocations
             $allocations['allocations'][$worktreeName] = $portAllocations;
             $this->saveAllocations($allocations);
 
-            // Step 11: Run install.sh
             $installScript = $worktreePath . '/bin/install.sh';
+
             if (file_exists($installScript)) {
                 $output->writeln('<info>Running install script...</info>');
                 $this->runInstallScript($installScript, $output);
@@ -108,9 +83,11 @@ class NewCommand extends Command
     protected function getHomeDirectory(): string
     {
         $home = $_SERVER['HOME'] ?? getenv('HOME');
+
         if (!$home) {
             throw new WorktreeException('Could not determine home directory');
         }
+
         return $home;
     }
 
@@ -431,12 +408,17 @@ class NewCommand extends Command
         return $baseName . '-' . ($maxNumber + 1);
     }
 
-    protected function isGitRepository(string $path): bool
+    protected function ensureProjectDirIsGitRepository(string $path): void
     {
-        return is_dir($path . '/.git') || is_file($path . '/.git');
+        if (!is_dir($path . '/.git') || is_file($path . '/.git')) {
+            throw new WorktreeException(sprintf(
+                "Not a git repository: %s\nThe current directory must be a git repository to create worktrees.",
+                $path
+            ));
+        }
     }
 
-    protected function validateBranch(string $branch): void
+    protected function ensureBranchExists(string $branch): void
     {
         $result = $this->executeGitCommand("git rev-parse --verify {$branch}");
 
@@ -445,6 +427,17 @@ class NewCommand extends Command
                 "Branch '%s' does not exist\n\nTo create it, run:\n  git branch %s",
                 $branch,
                 $branch
+            ));
+        }
+    }
+
+    protected function ensureWorktreeDoesNotExist(string $worktreePath): void
+    {
+        if (file_exists($worktreePath)) {
+            throw new WorktreeException(sprintf(
+                "Worktree already exists at %s\nPlease remove the existing worktree first:\n  git worktree remove %s",
+                $worktreePath,
+                $worktreePath
             ));
         }
     }
