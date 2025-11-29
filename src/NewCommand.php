@@ -4,11 +4,13 @@ namespace Osmianski\WorktreeManager;
 
 use Exception;
 use Osmianski\WorktreeManager\Exception\WorktreeException;
+use RuntimeException;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Formatter\OutputFormatterStyle;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\Process\Process;
 use Symfony\Component\Yaml\Yaml;
 
 class NewCommand extends Command
@@ -56,7 +58,7 @@ class NewCommand extends Command
             }
 
             $output->writeln('<info>Creating git worktree...</info>');
-            $this->createWorktree($currentDir, $worktreePath, $base, $branch);
+            $this->createWorktree($worktreePath, $base, $branch);
 
             $output->writeln('<info>Generating .env file...</info>');
             $this->generateEnvFile($worktreePath, $portAllocations);
@@ -84,10 +86,6 @@ class NewCommand extends Command
             return Command::FAILURE;
         }
     }
-
-    // ========================================
-    // Configuration Methods
-    // ========================================
 
     protected function getHomeDirectory(): string
     {
@@ -139,7 +137,7 @@ class NewCommand extends Command
             $config = $config['environment'];
         }
 
-        $this->validateWorktreesConfig($config);
+        $this->validateProjectConfig($config);
         return $config;
     }
 
@@ -170,7 +168,7 @@ class NewCommand extends Command
         }
     }
 
-    protected function validateWorktreesConfig(array $config): void
+    protected function validateProjectConfig(array $config): void
     {
         if (empty($config)) {
             throw new WorktreeException('worktrees.yml is empty');
@@ -227,10 +225,6 @@ class NewCommand extends Command
 
         return ['start' => $start, 'end' => $end];
     }
-
-    // ========================================
-    // Allocation Methods
-    // ========================================
 
     protected function loadAllocations(): array
     {
@@ -311,10 +305,6 @@ class NewCommand extends Command
         return $ports;
     }
 
-    // ========================================
-    // Port Allocation Methods
-    // ========================================
-
     protected function allocatePorts(array $config, array $allocations, array $globalConfig, bool $validate): array
     {
         $usedPorts = array_merge(
@@ -383,10 +373,6 @@ class NewCommand extends Command
         return $result !== false;
     }
 
-    // ========================================
-    // Worktree Management Methods
-    // ========================================
-
     protected function generateNextWorktreeName(string $currentPath): string
     {
         $baseName = basename($currentPath);
@@ -427,9 +413,9 @@ class NewCommand extends Command
 
     protected function ensureBranchExists(string $branch): void
     {
-        $result = execute_git_command("git rev-parse --verify {$branch}");
+        $result = run("git rev-parse --verify {$branch}");
 
-        if ($result['exitCode'] !== 0) {
+        if ($result->getExitCode() !== 0) {
             throw new WorktreeException(sprintf(
                 "Branch '%s' does not exist\n\nTo create it, run:\n  git branch %s",
                 $branch,
@@ -449,33 +435,29 @@ class NewCommand extends Command
         }
     }
 
-    protected function createWorktree(string $sourcePath, string $targetPath, string $base, ?string $branch): void
+    protected function createWorktree(string $targetPath, string $base, ?string $branch): void
     {
         $targetName = basename($targetPath);
 
         if ($branch === null) {
             // Create worktree in detached HEAD state
-            $result = execute_git_command("git worktree add --detach ../{$targetName} {$base}");
+            $result = run("git worktree add --detach ../{$targetName} {$base}");
         }
         else {
             // Validate that the branch exists
             $this->ensureBranchExists($branch);
 
             // Create worktree with specified branch
-            $result = execute_git_command("git worktree add -b {$branch} ../{$targetName} {$base}");
+            $result = run("git worktree add -b {$branch} ../{$targetName} {$base}");
         }
 
-        if ($result['exitCode'] !== 0) {
+        if ($result->getExitCode() !== 0) {
             throw new WorktreeException(sprintf(
                 "Git command failed: %s",
-                $result['error']
+                $result->getErrorOutput()
             ));
         }
     }
-
-    // ========================================
-    // File Generation Methods
-    // ========================================
 
     protected function generateEnvFile(string $path, array $ports): void
     {
@@ -500,40 +482,17 @@ class NewCommand extends Command
         }
     }
 
-    // ========================================
-    // Install Script Methods
-    // ========================================
-
     protected function runInstallScript(string $scriptPath, OutputInterface $output): void
     {
         $workingDir = dirname($scriptPath);
-        $command = "cd " . escapeshellarg($workingDir) . " && bash bin/install.sh 2>&1";
 
-        $descriptors = [
-            0 => ["pipe", "r"],
-            1 => ["pipe", "w"],
-            2 => ["pipe", "w"]
-        ];
+        $process = run_script($output, 'bash bin/install.sh', $workingDir);
 
-        $process = proc_open($command, $descriptors, $pipes);
-
-        if (is_resource($process)) {
-            fclose($pipes[0]);
-
-            while ($line = fgets($pipes[1])) {
-                $output->write("  " . $line);
-            }
-
-            fclose($pipes[1]);
-            fclose($pipes[2]);
-
-            $exitCode = proc_close($process);
-
-            if ($exitCode !== 0) {
-                $output->writeln("<comment>Warning: install.sh exited with code {$exitCode}</comment>");
-                $output->writeln("<comment>You may need to run it manually:</comment>");
-                $output->writeln("<comment>  cd {$workingDir} && bash bin/install.sh</comment>");
-            }
+        if (!$process->isSuccessful()) {
+            $exitCode = $process->getExitCode();
+            $output->writeln("<comment>Warning: install.sh exited with code {$exitCode}</comment>");
+            $output->writeln("<comment>You may need to run it manually:</comment>");
+            $output->writeln("<comment>  cd {$workingDir} && bash bin/install.sh</comment>");
         }
     }
 }

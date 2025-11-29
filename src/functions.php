@@ -1,34 +1,35 @@
 <?php
 
 use Osmianski\WorktreeManager\Exception\WorktreeException;
+use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\Process\Process;
 
-function execute_git_command(string $command): array
+function run(string $command, ?string $workingDir = null): Process
 {
-    $descriptors = [
-        0 => ["pipe", "r"],
-        1 => ["pipe", "w"],
-        2 => ["pipe", "w"]
-    ];
+    $process = Process::fromShellCommandline($command, $workingDir);
+    $process->run();
 
-    $process = proc_open($command, $descriptors, $pipes);
+    return $process;
+}
 
-    if (!is_resource($process)) {
-        return ['exitCode' => 1, 'output' => '', 'error' => 'Failed to execute command'];
+function run_script(OutputInterface $output, string $command, ?string $workingDir = null): Process
+{
+    $process = new Process(explode(' ', $command), $workingDir);
+
+    if (Process::isTtySupported()) {
+        try {
+            $process->setTty(true);
+        }
+        catch (RuntimeException $e) {
+            // TTY not available, continue without it
+        }
     }
 
-    fclose($pipes[0]);
-    $output = stream_get_contents($pipes[1]);
-    $error = stream_get_contents($pipes[2]);
-    fclose($pipes[1]);
-    fclose($pipes[2]);
+    $process->run(function ($type, $line) use ($output) {
+        $output->write('  ' . $line);
+    });
 
-    $exitCode = proc_close($process);
-
-    return [
-        'exitCode' => $exitCode,
-        'output' => $output,
-        'error' => $error
-    ];
+    return $process;
 }
 
 function ensure_project_dir_is_git_repository(string $path): void

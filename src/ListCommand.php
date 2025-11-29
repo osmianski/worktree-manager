@@ -21,16 +21,16 @@ class ListCommand extends Command
         try {
             ensure_project_dir_is_git_repository(getcwd());
 
-            $result = execute_git_command('git worktree list');
+            $result = run('git worktree list');
 
-            if ($result['exitCode'] !== 0) {
+            if ($result->getExitCode() !== 0) {
                 throw new WorktreeException(sprintf(
                     "Git command failed: %s",
-                    $result['error']
+                    $result->getErrorOutput()
                 ));
             }
 
-            $output->write($result['output']);
+            $output->write($result->getOutput());
 
             return Command::SUCCESS;
         }
