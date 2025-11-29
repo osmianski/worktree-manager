@@ -10,7 +10,10 @@
     "autoload": {
         "psr-4": {
             "Osmianski\\WorktreeManager\\": "src/"
-        }
+        },
+        "files": [
+            "src/functions.php"
+        ]
     },
     "bin": ["bin/worktree"]
 }

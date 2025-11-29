@@ -18,7 +18,8 @@ class NewCommand extends Command
         $this
             ->setName('new')
             ->setDescription('Create new worktree and environment for it')
-            ->addOption('branch', 'b', InputOption::VALUE_REQUIRED, 'Branch to checkout in worktree', 'main')
+            ->addOption('branch', 'b', InputOption::VALUE_OPTIONAL, 'Branch to checkout in worktree (if not specified, creates detached HEAD)')
+            ->addOption('base', null, InputOption::VALUE_REQUIRED, 'Base branch to create worktree from', 'main')
             ->addOption('validate-ports', null, InputOption::VALUE_NONE, 'Validate that ports are actually available via socket check');
     }
 
@@ -30,11 +31,12 @@ class NewCommand extends Command
 
             $currentDir = getcwd();
             $branch = $input->getOption('branch');
+            $base = $input->getOption('base');
             $validatePorts = $input->getOption('validate-ports');
 
             $output->writeln('<info>Checking git repository...</info>');
-            $this->ensureProjectDirIsGitRepository($currentDir);
-            $this->ensureBranchExists($branch);
+            ensure_project_dir_is_git_repository($currentDir);
+            $this->ensureBranchExists($base);
 
             $output->writeln('<info>Loading configuration...</info>');
             $worktreesConfig = $this->loadProjectConfig($currentDir);
@@ -54,7 +56,7 @@ class NewCommand extends Command
             }
 
             $output->writeln('<info>Creating git worktree...</info>');
-            $this->createWorktree($currentDir, $worktreePath, $branch);
+            $this->createWorktree($currentDir, $worktreePath, $base, $branch);
 
             $output->writeln('<info>Generating .env file...</info>');
             $this->generateEnvFile($worktreePath, $portAllocations);
@@ -117,7 +119,7 @@ class NewCommand extends Command
             throw new WorktreeException(
                 sprintf("%s not found in %s", $filename, $dir),
                 sprintf(
-                    "Please create a %s file with port configuration.\n\nExample:\nHTTP_PORT:\n  port_range: \"8000..\"\nVITE_PORT:\n  port_range: \"5173..\"",
+                    "Please create a %s file with port configuration.\n\nExample:\nenvironment:\n  HTTP_PORT:\n    port_range: \"8000..\"\n  VITE_PORT:\n    port_range: \"5173..\"",
                     $filename,
                 ));
         }
@@ -130,6 +132,11 @@ class NewCommand extends Command
                 "Invalid YAML syntax in worktrees.yml: %s",
                 $e->getMessage()
             ));
+        }
+
+        // Extract environment section if present
+        if (isset($config['environment']) && is_array($config['environment'])) {
+            $config = $config['environment'];
         }
 
         $this->validateWorktreesConfig($config);
@@ -172,7 +179,7 @@ class NewCommand extends Command
         foreach ($config as $varName => $varConfig) {
             if (!is_array($varConfig) || !isset($varConfig['port_range'])) {
                 throw new WorktreeException(sprintf(
-                    "Invalid configuration for %s: expected 'port_range' key\n\nExample:\n%s:\n  port_range: \"8000..\"",
+                    "Invalid configuration for %s: expected 'port_range' key\n\nExample:\nenvironment:\n  %s:\n    port_range: \"8000..\"",
                     $varName,
                     $varName
                 ));
@@ -418,19 +425,9 @@ class NewCommand extends Command
         return $baseName . '-' . ($maxNumber + 1);
     }
 
-    protected function ensureProjectDirIsGitRepository(string $path): void
-    {
-        if (!is_dir($path . '/.git') || is_file($path . '/.git')) {
-            throw new WorktreeException(sprintf(
-                "Not a git repository: %s\nThe current directory must be a git repository to create worktrees.",
-                $path
-            ));
-        }
-    }
-
     protected function ensureBranchExists(string $branch): void
     {
-        $result = $this->executeGitCommand("git rev-parse --verify {$branch}");
+        $result = execute_git_command("git rev-parse --verify {$branch}");
 
         if ($result['exitCode'] !== 0) {
             throw new WorktreeException(sprintf(
@@ -452,10 +449,21 @@ class NewCommand extends Command
         }
     }
 
-    protected function createWorktree(string $sourcePath, string $targetPath, string $branch): void
+    protected function createWorktree(string $sourcePath, string $targetPath, string $base, ?string $branch): void
     {
         $targetName = basename($targetPath);
-        $result = $this->executeGitCommand("git worktree add ../{$targetName} {$branch}");
+
+        if ($branch === null) {
+            // Create worktree in detached HEAD state
+            $result = execute_git_command("git worktree add --detach ../{$targetName} {$base}");
+        }
+        else {
+            // Validate that the branch exists
+            $this->ensureBranchExists($branch);
+
+            // Create worktree with specified branch
+            $result = execute_git_command("git worktree add -b {$branch} ../{$targetName} {$base}");
+        }
 
         if ($result['exitCode'] !== 0) {
             throw new WorktreeException(sprintf(
@@ -463,35 +471,6 @@ class NewCommand extends Command
                 $result['error']
             ));
         }
-    }
-
-    protected function executeGitCommand(string $command): array
-    {
-        $descriptors = [
-            0 => ["pipe", "r"],
-            1 => ["pipe", "w"],
-            2 => ["pipe", "w"]
-        ];
-
-        $process = proc_open($command, $descriptors, $pipes);
-
-        if (!is_resource($process)) {
-            return ['exitCode' => 1, 'output' => '', 'error' => 'Failed to execute command'];
-        }
-
-        fclose($pipes[0]);
-        $output = stream_get_contents($pipes[1]);
-        $error = stream_get_contents($pipes[2]);
-        fclose($pipes[1]);
-        fclose($pipes[2]);
-
-        $exitCode = proc_close($process);
-
-        return [
-            'exitCode' => $exitCode,
-            'output' => $output,
-            'error' => $error
-        ];
     }
 
     // ========================================
