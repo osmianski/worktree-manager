@@ -5,6 +5,7 @@ namespace Osmianski\WorktreeManager;
 use Exception;
 use Osmianski\WorktreeManager\Exception\WorktreeException;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Formatter\OutputFormatterStyle;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -24,6 +25,9 @@ class NewCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         try {
+            // See https://www.ditig.com/256-colors-cheat-sheet for supported colors
+            $output->getFormatter()->setStyle('error', new OutputFormatterStyle('white', '#5F0000'));
+
             $currentDir = getcwd();
             $branch = $input->getOption('branch');
             $validatePorts = $input->getOption('validate-ports');
@@ -33,7 +37,7 @@ class NewCommand extends Command
             $this->ensureBranchExists($branch);
 
             $output->writeln('<info>Loading configuration...</info>');
-            $worktreesConfig = $this->loadWorktreesConfig($currentDir);
+            $worktreesConfig = $this->loadProjectConfig($currentDir);
             $globalConfig = $this->loadGlobalConfig();
             $allocations = $this->loadAllocations();
 
@@ -58,9 +62,7 @@ class NewCommand extends Command
             $allocations['allocations'][$worktreeName] = $portAllocations;
             $this->saveAllocations($allocations);
 
-            $installScript = $worktreePath . '/bin/install.sh';
-
-            if (file_exists($installScript)) {
+            if (file_exists($installScript = $worktreePath . '/bin/install.sh')) {
                 $output->writeln('<info>Running install script...</info>');
                 $this->runInstallScript($installScript, $output);
             }
@@ -71,7 +73,12 @@ class NewCommand extends Command
             return Command::SUCCESS;
 
         } catch (WorktreeException $e) {
-            $output->writeln("<error>Error: {$e->getMessage()}</error>");
+            $output->writeln("\n<error>ERROR</error> {$e->getMessage()}\n");
+
+            if ($e->getDescription()) {
+                $output->writeln($e->getDescription());
+            }
+
             return Command::FAILURE;
         }
     }
@@ -101,15 +108,18 @@ class NewCommand extends Command
         return $this->getHomeDirectory() . '/.local/share/worktree-manager/allocations.json';
     }
 
-    protected function loadWorktreesConfig(string $dir): array
+    protected function loadProjectConfig(string $dir): array
     {
-        $configPath = $dir . '/worktrees.yml';
+        $filename = '.worktree.yml';
+        $configPath = "{$dir}/{$filename}";
 
         if (!file_exists($configPath)) {
-            throw new WorktreeException(sprintf(
-                "worktrees.yml not found in %s\nPlease create a worktrees.yml file with port configuration.\n\nExample:\nHTTP_PORT:\n  port_range: \"8000..\"\nVITE_PORT:\n  port_range: \"5173..\"",
-                $dir
-            ));
+            throw new WorktreeException(
+                sprintf("%s not found in %s", $filename, $dir),
+                sprintf(
+                    "Please create a %s file with port configuration.\n\nExample:\nHTTP_PORT:\n  port_range: \"8000..\"\nVITE_PORT:\n  port_range: \"5173..\"",
+                    $filename,
+                ));
         }
 
         try {
