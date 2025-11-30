@@ -49,3 +49,7 @@ worktree new
 
 - Before a Markdown list, always add an empty line.
 - Right after a heading, always add an empty line.
+
+## Other
+
+- If asked to prepare a commit message, fit it in one short sentence (unless the commit is really big), and don't write anything about Claude or Anthropic, and don't do any Git operations, just print the commit message.
