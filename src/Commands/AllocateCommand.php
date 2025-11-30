@@ -6,7 +6,10 @@ use Exception;
 use Osmianski\WorktreeManager\Exception\WorktreeException;
 use RuntimeException;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Input\ArrayInput;
+use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Yaml\Yaml;
 
@@ -16,7 +19,13 @@ class AllocateCommand extends Command
     {
         $this
             ->setName('allocate')
-            ->setDescription('Allocate ports for current directory and create .env file');
+            ->setDescription('Allocate ports for current directory and create .env file')
+            ->addArgument(
+                'assignments',
+                InputArgument::IS_ARRAY | InputArgument::OPTIONAL,
+                'Port assignments in the format VAR_NAME=PORT (e.g., DB_PORT=33060 REDIS_PORT=6379)'
+            )
+            ->addOption('install', 'i', InputOption::VALUE_NONE, 'Run install command after allocating ports');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -30,6 +39,14 @@ class AllocateCommand extends Command
             $allocations = load_allocations();
 
             $directoryName = basename($currentDir);
+
+            // Parse port assignments from command line arguments
+            $manualAssignments = $this->parseAssignments($input->getArgument('assignments'));
+
+            // Validate manual assignments against worktree config
+            if (!empty($manualAssignments)) {
+                $this->validateAssignments($manualAssignments, $worktreeConfig, $output);
+            }
 
             // Get existing allocations for this directory
             $existingAllocations = $allocations['allocations'][$directoryName] ?? [];
@@ -77,7 +94,7 @@ class AllocateCommand extends Command
                     $worktreeConfig['environment'] ?? [],
                     array_flip($newVars)
                 );
-                $newPortAllocations = $this->allocatePorts($newPortConfig, $allocations, $globalConfig);
+                $newPortAllocations = $this->allocatePorts($newPortConfig, $allocations, $globalConfig, $manualAssignments);
 
                 foreach ($newPortAllocations as $var => $port) {
                     $output->writeln("  {$var}: {$port}");
@@ -85,6 +102,36 @@ class AllocateCommand extends Command
 
                 $portAllocations = array_merge($portAllocations, $newPortAllocations);
                 $changed = true;
+            }
+
+            // Apply manual assignments to existing allocations if provided
+            if (!empty($manualAssignments)) {
+                $usedPorts = array_merge(
+                    $this->getAllocatedPorts($allocations),
+                    $this->getReservedPorts($globalConfig)
+                );
+
+                // Exclude current worktree's ports from used ports
+                foreach ($portAllocations as $port) {
+                    $usedPorts = array_diff($usedPorts, [$port]);
+                }
+
+                foreach ($manualAssignments as $var => $port) {
+                    if (isset($portAllocations[$var]) && $portAllocations[$var] !== $port) {
+                        // Check if the new port is available
+                        if (in_array($port, $usedPorts)) {
+                            throw new WorktreeException(sprintf(
+                                "Port %d for %s is already allocated or reserved",
+                                $port,
+                                $var
+                            ));
+                        }
+
+                        $output->writeln("<info>Updating {$var}: {$portAllocations[$var]} → {$port}</info>");
+                        $portAllocations[$var] = $port;
+                        $changed = true;
+                    }
+                }
             }
 
             // Display current allocations if nothing changed
@@ -110,6 +157,13 @@ class AllocateCommand extends Command
             }
 
             $output->writeln("<info>✓ Ports allocated successfully for: {$directoryName}</info>");
+
+            // Run install command if requested
+            if ($input->getOption('install')) {
+                $output->writeln('');
+                $output->writeln('<info>Running install...</info>');
+                run_install($this->getApplication(), $output);
+            }
 
             return Command::SUCCESS;
         }
@@ -169,7 +223,7 @@ class AllocateCommand extends Command
         return $ports;
     }
 
-    protected function allocatePorts(array $config, array $allocations, array $globalConfig): array
+    protected function allocatePorts(array $config, array $allocations, array $globalConfig, array $manualAssignments = []): array
     {
         $usedPorts = array_merge(
             $this->getAllocatedPorts($allocations),
@@ -179,6 +233,25 @@ class AllocateCommand extends Command
         $portAllocations = [];
 
         foreach ($config as $varName => $varConfig) {
+            // Use manual assignment if provided
+            if (isset($manualAssignments[$varName])) {
+                $port = $manualAssignments[$varName];
+
+                // Validate that the port is not already allocated to another worktree
+                if (in_array($port, $usedPorts)) {
+                    throw new WorktreeException(sprintf(
+                        "Port %d for %s is already allocated or reserved",
+                        $port,
+                        $varName
+                    ));
+                }
+
+                $portAllocations[$varName] = $port;
+                $usedPorts[] = $port;
+                continue;
+            }
+
+            // Auto-allocate port from range
             $range = parse_port_range($varConfig['port_range'], $varName);
 
             $port = $this->findNextAvailablePort(
@@ -216,5 +289,45 @@ class AllocateCommand extends Command
         }
 
         return null;
+    }
+
+    protected function parseAssignments(array $arguments): array
+    {
+        $assignments = [];
+
+        foreach ($arguments as $arg) {
+            if (!preg_match('/^([A-Z_][A-Z0-9_]*)=(\d+)$/', $arg, $matches)) {
+                throw new WorktreeException(sprintf(
+                    "Invalid assignment format: %s\nExpected format: VAR_NAME=PORT (e.g., DB_PORT=33060)",
+                    $arg
+                ));
+            }
+
+            $varName = $matches[1];
+            $port = (int)$matches[2];
+
+            if ($port < 1024 || $port > 65535) {
+                throw new WorktreeException(sprintf(
+                    "Port must be between 1024 and 65535, got %d for %s",
+                    $port,
+                    $varName
+                ));
+            }
+
+            $assignments[$varName] = $port;
+        }
+
+        return $assignments;
+    }
+
+    protected function validateAssignments(array $assignments, array $worktreeConfig, $output): void
+    {
+        $configuredVars = array_keys($worktreeConfig['environment'] ?? []);
+
+        foreach ($assignments as $varName => $port) {
+            if (!in_array($varName, $configuredVars)) {
+                $output->writeln("<comment>Warning: {$varName} is not defined in .worktree.yml</comment>");
+            }
+        }
     }
 }

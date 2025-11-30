@@ -362,3 +362,29 @@ function execute_hook(mixed $hookValue, string $workingDir, OutputInterface $out
         }
     }
 }
+
+function run_install($application, OutputInterface $output, ?string $worktreePath = null): void
+{
+    $currentDir = $worktreePath ? getcwd() : null;
+
+    if ($worktreePath) {
+        chdir($worktreePath);
+    }
+
+    try {
+        $exitCode = $application->find('install')->run(new Symfony\Component\Console\Input\ArrayInput([]), $output);
+
+        if ($exitCode !== 0) {
+            $errorPath = $worktreePath ?? getcwd();
+            throw new WorktreeException(
+                'Install command failed',
+                "You may need to run it manually:\n  cd {$errorPath}\n  worktree install"
+            );
+        }
+    }
+    finally {
+        if ($currentDir) {
+            chdir($currentDir);
+        }
+    }
+}

@@ -5,6 +5,8 @@ require __DIR__ . '/../vendor/autoload.php';
 
 $app = new \Osmianski\WorktreeManager\Application('Worktree Manager', '0.1.0');
 $app->add(new \Osmianski\WorktreeManager\Commands\AllocateCommand());
+$app->add(new \Osmianski\WorktreeManager\Commands\AllocationsCommand());
+$app->add(new \Osmianski\WorktreeManager\Commands\ConfigReservePortCommand());
 $app->add(new \Osmianski\WorktreeManager\Commands\HelpListCommand());
 $app->add(new \Osmianski\WorktreeManager\Commands\InstallCommand());
 $app->add(new \Osmianski\WorktreeManager\Commands\ListCommand());

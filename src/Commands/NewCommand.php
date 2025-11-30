@@ -70,7 +70,7 @@ class NewCommand extends Command
             if ($install) {
                 $output->writeln('');
                 $output->writeln('<info>Running install...</info>');
-                $this->runInstallCommand($worktreePath, $output);
+                run_install($this->getApplication(), $output, $worktreePath);
             }
 
             $output->writeln('');
@@ -285,26 +285,6 @@ class NewCommand extends Command
                 "Git command failed: %s",
                 $result->getErrorOutput()
             ));
-        }
-    }
-
-    protected function runInstallCommand(string $worktreePath, OutputInterface $output): void
-    {
-        $currentDir = getcwd();
-        chdir($worktreePath);
-
-        try {
-            $exitCode = $this->getApplication()->find('install')->run(new ArrayInput([]), $output);
-
-            if ($exitCode !== Command::SUCCESS) {
-                throw new WorktreeException(
-                    'Install command failed',
-                    "You may need to run it manually:\n  cd {$worktreePath}\n  worktree install"
-                );
-            }
-        }
-        finally {
-            chdir($currentDir);
         }
     }
 }
