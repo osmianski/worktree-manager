@@ -16,4 +16,9 @@ abstract class Project
     {
         // Default no-op
     }
+
+    public function migrate(OutputInterface $output): void
+    {
+        // Default no-op
+    }
 }

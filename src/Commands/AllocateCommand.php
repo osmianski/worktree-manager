@@ -25,7 +25,8 @@ class AllocateCommand extends Command
                 InputArgument::IS_ARRAY | InputArgument::OPTIONAL,
                 'Port assignments in the format VAR_NAME=PORT (e.g., DB_PORT=33060 REDIS_PORT=6379)'
             )
-            ->addOption('install', 'i', InputOption::VALUE_NONE, 'Run install command after allocating ports');
+            ->addOption('install', 'i', InputOption::VALUE_NONE, 'Run install command after allocating ports')
+            ->addOption('migrate', 'm', InputOption::VALUE_NONE, 'Run migrate command after allocating ports');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -163,6 +164,13 @@ class AllocateCommand extends Command
                 $output->writeln('');
                 $output->writeln('<info>Running install...</info>');
                 run_install($this->getApplication(), $output);
+            }
+
+            // Run migrate command if requested
+            if ($input->getOption('migrate')) {
+                $output->writeln('');
+                $output->writeln('<info>Running migrations...</info>');
+                run_migrations($this->getApplication(), $output);
             }
 
             return Command::SUCCESS;

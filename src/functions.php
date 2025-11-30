@@ -388,3 +388,29 @@ function run_install($application, OutputInterface $output, ?string $worktreePat
         }
     }
 }
+
+function run_migrations($application, OutputInterface $output, ?string $worktreePath = null): void
+{
+    $currentDir = $worktreePath ? getcwd() : null;
+
+    if ($worktreePath) {
+        chdir($worktreePath);
+    }
+
+    try {
+        $exitCode = $application->find('migrate')->run(new Symfony\Component\Console\Input\ArrayInput([]), $output);
+
+        if ($exitCode !== 0) {
+            $errorPath = $worktreePath ?? getcwd();
+            throw new WorktreeException(
+                'Migrate command failed',
+                "You may need to run it manually:\n  cd {$errorPath}\n  worktree migrate"
+            );
+        }
+    }
+    finally {
+        if ($currentDir) {
+            chdir($currentDir);
+        }
+    }
+}

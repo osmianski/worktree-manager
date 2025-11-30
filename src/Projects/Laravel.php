@@ -61,4 +61,14 @@ class Laravel extends Project
             throw new \RuntimeException(sprintf("npm install failed: %s", $result->getErrorOutput()));
         }
     }
+
+    public function migrate(OutputInterface $output): void
+    {
+        $output->writeln('<info>Running migrations...</info>');
+        $result = run('php artisan migrate:fresh --seed', $this->path);
+
+        if (!$result->isSuccessful()) {
+            throw new \RuntimeException(sprintf("Migration failed: %s", $result->getErrorOutput()));
+        }
+    }
 }

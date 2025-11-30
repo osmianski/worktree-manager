@@ -60,4 +60,17 @@ class Monorepo extends Project
             $output->writeln("<info>✓ {$projectName} installed</info>");
         }
     }
+
+    public function migrate(OutputInterface $output): void
+    {
+        foreach ($this->subprojects as $subproject) {
+            $projectName = basename($subproject->path);
+            $output->writeln('');
+            $output->writeln("<info>Migrating {$projectName}...</info>");
+
+            $subproject->migrate($output);
+
+            $output->writeln("<info>✓ {$projectName} migrated</info>");
+        }
+    }
 }

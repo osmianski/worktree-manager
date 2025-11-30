@@ -24,6 +24,7 @@ class NewCommand extends Command
             ->addOption('branch', 'b', InputOption::VALUE_OPTIONAL, 'Branch to checkout in worktree (if not specified, creates detached HEAD)')
             ->addOption('base', null, InputOption::VALUE_REQUIRED, 'Base branch to create worktree from', 'main')
             ->addOption('install', 'i', InputOption::VALUE_NONE, 'Run install command in new worktree')
+            ->addOption('migrate', 'm', InputOption::VALUE_NONE, 'Run migrate command in new worktree')
             ->addOption('validate-ports', null, InputOption::VALUE_NONE, 'Validate that ports are actually available via socket check')
             ->setAliases(['add']);
     }
@@ -35,6 +36,7 @@ class NewCommand extends Command
             $branch = $input->getOption('branch');
             $base = $input->getOption('base');
             $install = $input->getOption('install');
+            $migrate = $input->getOption('migrate');
             $validatePorts = $input->getOption('validate-ports');
 
             $output->writeln('<info>Checking git repository...</info>');
@@ -71,6 +73,12 @@ class NewCommand extends Command
                 $output->writeln('');
                 $output->writeln('<info>Running install...</info>');
                 run_install($this->getApplication(), $output, $worktreePath);
+            }
+
+            if ($migrate) {
+                $output->writeln('');
+                $output->writeln('<info>Running migrations...</info>');
+                run_migrations($this->getApplication(), $output, $worktreePath);
             }
 
             $output->writeln('');
