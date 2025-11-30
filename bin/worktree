@@ -3,13 +3,13 @@
 
 require __DIR__ . '/../vendor/autoload.php';
 
-use Osmianski\WorktreeManager\ListCommand;
-use Osmianski\WorktreeManager\NewCommand;
-use Osmianski\WorktreeManager\RemoveCommand;
 use Symfony\Component\Console\Application;
 
 $app = new Application('Worktree Manager', '0.1.0');
-$app->add(new NewCommand());
-$app->add(new ListCommand());
-$app->add(new RemoveCommand());
+$app->add(new \Osmianski\WorktreeManager\NewCommand());
+$app->add(new \Osmianski\WorktreeManager\ListCommand());
+$app->add(new \Osmianski\WorktreeManager\RemoveCommand());
+$app->add(new \Osmianski\WorktreeManager\RootAddCommand());
+$app->add(new \Osmianski\WorktreeManager\RootRemoveCommand());
+$app->add(new \Osmianski\WorktreeManager\RootListCommand());
 $app->run();

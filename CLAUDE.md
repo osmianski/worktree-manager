@@ -31,6 +31,7 @@ worktree new
 ## PHP
 
 - Always add import statements for classes, even for those without namespace. So in code it should read `RuntimeException`, not `\RuntimeException`.
+- In `bin/worktree`, always use fully qualified command class names, for example `$app->add(new \Osmianski\WorktreeManager\NewCommand());` not `$app->add(new NewCommand());`.
 - Always start `elseif`, `else`, `catch` and other language constructs that follow a closing `}` from a new line instead of placing them on the same line as `}`
 - Put reusable functions into `src/functions.php`, for function name, use snake_case naming convention, like standard PHP functions.
 

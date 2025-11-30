@@ -57,3 +57,52 @@ function get_allocations_path(): string
 {
     return get_home_directory() . '/.local/share/worktree-manager/allocations.json';
 }
+
+function get_config_path(): string
+{
+    return get_home_directory() . '/.config/worktree-manager/config.yml';
+}
+
+function load_global_config(): array
+{
+    $configPath = get_config_path();
+
+    if (!file_exists($configPath)) {
+        return ['reserved_ports' => [], 'roots' => []];
+    }
+
+    try {
+        $config = Symfony\Component\Yaml\Yaml::parseFile($configPath);
+        return $config ?? ['reserved_ports' => [], 'roots' => []];
+    }
+    catch (Exception $e) {
+        throw new WorktreeException(sprintf(
+            "Invalid YAML syntax in config.yml: %s",
+            $e->getMessage()
+        ));
+    }
+}
+
+function save_global_config(array $config): void
+{
+    $configPath = get_config_path();
+    $directory = dirname($configPath);
+
+    if (!is_dir($directory)) {
+        mkdir($directory, 0755, true);
+    }
+
+    $yaml = Symfony\Component\Yaml\Yaml::dump($config, 2, 2);
+    file_put_contents($configPath, $yaml);
+}
+
+function expand_path(string $path): string
+{
+    // Expand ~ to home directory
+    if (str_starts_with($path, '~/') || $path === '~') {
+        $home = get_home_directory();
+        $path = $home . substr($path, 1);
+    }
+
+    return $path;
+}
