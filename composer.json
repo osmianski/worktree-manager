@@ -1,7 +1,7 @@
 {
     "name": "osmianski/worktree-manager",
     "description": "Manage Git worktrees with automated port allocation",
-    "type": "project",
+    "type": "library",
     "license": "MIT",
     "require": {
         "php": "^8.1",
