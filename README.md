@@ -1,4 +1,6 @@
-PHP CLI tool for managing Git worktree environments with automated port allocation.
+Need to maintain multiple working branches simultaneously - whether for long-term parallel development or running AI agents in separate worktrees? Setting up each environment is tedious.
+
+This tool automates it: create worktrees with fully working environments in seconds, automatically allocate ports, install dependencies, create Docker containers and migrate data.
 
 ## Installation
 
