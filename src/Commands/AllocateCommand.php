@@ -31,21 +31,67 @@ class AllocateCommand extends Command
 
             $directoryName = basename($currentDir);
 
-            // Check if already allocated
-            if (isset($allocations['allocations'][$directoryName])) {
+            // Get existing allocations for this directory
+            $existingAllocations = $allocations['allocations'][$directoryName] ?? [];
+
+            // Determine which ports need to be allocated/removed
+            $requestedVars = array_keys($worktreeConfig['environment'] ?? []);
+            $allocatedVars = array_keys($existingAllocations);
+            $newVars = array_diff($requestedVars, $allocatedVars);
+            $removedVars = array_diff($allocatedVars, $requestedVars);
+
+            // If no changes needed, check if .env exists
+            if (empty($newVars) && empty($removedVars)) {
+                $envPath = $currentDir . '/.env';
+
+                if (file_exists($envPath)) {
+                    $output->writeln("<comment>Ports already allocated for {$directoryName}</comment>");
+                    $output->writeln("\nCurrent allocations:");
+                    foreach ($existingAllocations as $var => $port) {
+                        $output->writeln("  {$var}: {$port}");
+                    }
+                    return Command::SUCCESS;
+                }
+
+                // .env is missing, regenerate it
                 $output->writeln("<comment>Ports already allocated for {$directoryName}</comment>");
                 $output->writeln("\nCurrent allocations:");
-                foreach ($allocations['allocations'][$directoryName] as $var => $port) {
+                foreach ($existingAllocations as $var => $port) {
                     $output->writeln("  {$var}: {$port}");
                 }
+
+                $output->writeln("\n<info>Generating .env file...</info>");
+                generate_env_file($currentDir, $existingAllocations);
+
+                $output->writeln("<info>✓ .env file generated successfully</info>");
                 return Command::SUCCESS;
             }
 
-            $output->writeln('<info>Allocating ports...</info>');
-            $portAllocations = $this->allocatePorts($worktreeConfig['environment'] ?? [], $allocations, $globalConfig);
+            // Remove ports that are no longer in config
+            if (!empty($removedVars)) {
+                $output->writeln('<info>Removing obsolete port allocations...</info>');
+                foreach ($removedVars as $var) {
+                    $output->writeln("  {$var}: {$existingAllocations[$var]}");
+                    unset($existingAllocations[$var]);
+                }
+            }
 
-            foreach ($portAllocations as $var => $port) {
-                $output->writeln("  {$var}: {$port}");
+            // Allocate new ports
+            $portAllocations = $existingAllocations;
+            if (!empty($newVars)) {
+                $output->writeln('<info>Allocating new ports...</info>');
+                $newPortConfig = array_intersect_key(
+                    $worktreeConfig['environment'] ?? [],
+                    array_flip($newVars)
+                );
+                $newPortAllocations = $this->allocatePorts($newPortConfig, $allocations, $globalConfig);
+
+                foreach ($newPortAllocations as $var => $port) {
+                    $output->writeln("  {$var}: {$port}");
+                }
+
+                // Merge with existing allocations
+                $portAllocations = array_merge($portAllocations, $newPortAllocations);
             }
 
             $output->writeln('<info>Generating .env file...</info>');

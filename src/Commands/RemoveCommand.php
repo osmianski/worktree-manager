@@ -6,6 +6,7 @@ use Osmianski\WorktreeManager\Exception\WorktreeException;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 class RemoveCommand extends Command
@@ -15,7 +16,8 @@ class RemoveCommand extends Command
         $this
             ->setName('remove')
             ->setDescription('Remove a worktree by its number')
-            ->addArgument('number', InputArgument::REQUIRED, 'Worktree number (e.g., 2 for lp-2)');
+            ->addArgument('number', InputArgument::REQUIRED, 'Worktree number (e.g., 2 for lp-2)')
+            ->addOption('force', 'f', InputOption::VALUE_NONE, 'Force removal even if there are modified or untracked files');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -47,12 +49,36 @@ class RemoveCommand extends Command
 
             $output->writeln("<info>Removing worktree: {$worktreeName}</info>");
 
-            $result = run("git worktree remove {$worktreePath}");
+            $force = $input->getOption('force');
+            $command = $force ? "git worktree remove --force {$worktreePath}" : "git worktree remove {$worktreePath}";
+            $result = run($command);
 
             if ($result->getExitCode() !== 0) {
+                $errorOutput = trim($result->getErrorOutput());
+
+                // Check if the error is due to modified or untracked files
+                if (!$force && (str_contains($errorOutput, 'modified or untracked files') || str_contains($errorOutput, 'use --force'))) {
+                    $output->writeln("<error>ERROR</error> The worktree contains modified or untracked files:\n");
+
+                    // Show git status for the worktree
+                    $statusResult = run("git -C {$worktreePath} status --short");
+                    if ($statusResult->getExitCode() === 0) {
+                        $statusOutput = trim($statusResult->getOutput());
+                        if ($statusOutput) {
+                            $output->writeln($statusOutput);
+                        }
+                    }
+
+                    $output->writeln("\nOptions:");
+                    $output->writeln("  1. Review and commit/stash changes: cd {$worktreePath} && git status");
+                    $output->writeln("  2. Force removal: worktree remove {$number} --force");
+
+                    return Command::FAILURE;
+                }
+
                 throw new WorktreeException(sprintf(
                     "Git command failed: %s",
-                    $result->getErrorOutput()
+                    $errorOutput
                 ));
             }
 
