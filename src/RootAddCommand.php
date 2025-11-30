@@ -53,6 +53,9 @@ class RootAddCommand extends Command
             save_global_config($config);
 
             $output->writeln("<info>✓ Root added: {$directory}</info>");
+            $output->writeln('');
+            $output->writeln("To scan this root and sync port allocations, run:");
+            $output->writeln("  worktree scan");
 
             return Command::SUCCESS;
         }

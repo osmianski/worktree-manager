@@ -22,7 +22,8 @@ class NewCommand extends Command
             ->setDescription('Create new worktree and environment for it')
             ->addOption('branch', 'b', InputOption::VALUE_OPTIONAL, 'Branch to checkout in worktree (if not specified, creates detached HEAD)')
             ->addOption('base', null, InputOption::VALUE_REQUIRED, 'Base branch to create worktree from', 'main')
-            ->addOption('validate-ports', null, InputOption::VALUE_NONE, 'Validate that ports are actually available via socket check');
+            ->addOption('validate-ports', null, InputOption::VALUE_NONE, 'Validate that ports are actually available via socket check')
+            ->setAliases(['add']);
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int

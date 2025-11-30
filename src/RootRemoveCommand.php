@@ -33,9 +33,9 @@ class RootRemoveCommand extends Command
 
             $config = load_global_config();
 
-            if (!isset($config['roots']) || empty($config['roots'])) {
+            if (empty($config['roots'])) {
                 $output->writeln("<comment>No roots registered</comment>");
-                return Command::SUCCESS;
+                return Command::FAILURE;
             }
 
             $originalCount = count($config['roots']);
@@ -46,7 +46,7 @@ class RootRemoveCommand extends Command
 
             if (count($config['roots']) === $originalCount) {
                 $output->writeln("<comment>Root not found: {$directory}</comment>");
-                return Command::SUCCESS;
+                return Command::FAILURE;
             }
 
             save_global_config($config);

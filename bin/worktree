@@ -4,6 +4,7 @@
 require __DIR__ . '/../vendor/autoload.php';
 
 $app = new \Osmianski\WorktreeManager\Application('Worktree Manager', '0.1.0');
+$app->add(new \Osmianski\WorktreeManager\AllocateCommand());
 $app->add(new \Osmianski\WorktreeManager\HelpListCommand());
 $app->add(new \Osmianski\WorktreeManager\ListCommand());
 $app->add(new \Osmianski\WorktreeManager\NewCommand());
@@ -11,4 +12,5 @@ $app->add(new \Osmianski\WorktreeManager\RemoveCommand());
 $app->add(new \Osmianski\WorktreeManager\RootAddCommand());
 $app->add(new \Osmianski\WorktreeManager\RootListCommand());
 $app->add(new \Osmianski\WorktreeManager\RootRemoveCommand());
+$app->add(new \Osmianski\WorktreeManager\ScanCommand());
 $app->run();

@@ -106,3 +106,72 @@ function expand_path(string $path): string
 
     return $path;
 }
+
+function find_directories_with_worktree_config(string $rootPath): array
+{
+    $directories = [];
+
+    if (!is_dir($rootPath)) {
+        return $directories;
+    }
+
+    // Check direct children only
+    $entries = scandir($rootPath);
+
+    foreach ($entries as $entry) {
+        if ($entry === '.' || $entry === '..') {
+            continue;
+        }
+
+        $fullPath = $rootPath . '/' . $entry;
+
+        if (!is_dir($fullPath)) {
+            continue;
+        }
+
+        // Check if this directory has .worktree.yml
+        if (file_exists($fullPath . '/.worktree.yml')) {
+            $directories[] = $fullPath;
+        }
+    }
+
+    return $directories;
+}
+
+function load_allocations(): array
+{
+    $allocationsPath = get_allocations_path();
+
+    if (!file_exists($allocationsPath)) {
+        return ['allocations' => []];
+    }
+
+    $json = file_get_contents($allocationsPath);
+    $allocations = json_decode($json, true);
+
+    if ($allocations === null) {
+        throw new WorktreeException(sprintf(
+            "Invalid JSON in allocations.json: %s",
+            json_last_error_msg()
+        ));
+    }
+
+    return $allocations;
+}
+
+function save_allocations(array $allocations): void
+{
+    $allocationsPath = get_allocations_path();
+    $directory = dirname($allocationsPath);
+
+    if (!is_dir($directory)) {
+        mkdir($directory, 0755, true);
+    }
+
+    $json = json_encode($allocations, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+
+    // Atomic write: write to temp file, then rename
+    $tempPath = $allocationsPath . '.tmp';
+    file_put_contents($tempPath, $json);
+    rename($tempPath, $allocationsPath);
+}
