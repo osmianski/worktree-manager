@@ -40,3 +40,7 @@ ln -s $HOME/worktree-manager/bin/worktree $HOME/.local/bin/worktree
 # To switch back to the globally installed version:
 rm $HOME/.local/bin/worktree
 ```
+
+## License
+
+This project is licensed under the MIT License. See the [LICENSE.md](LICENSE.md) file for details.
