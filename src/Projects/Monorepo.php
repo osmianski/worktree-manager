@@ -2,6 +2,7 @@
 
 namespace Osmianski\WorktreeManager\Projects;
 
+use Osmianski\WorktreeManager\Exception\WorktreeException;
 use Symfony\Component\Console\Output\OutputInterface;
 
 class Monorepo extends Project
@@ -50,6 +51,15 @@ class Monorepo extends Project
 
     public function install(OutputInterface $output): void
     {
+        if (file_exists($this->path . '/package.json')) {
+            $output->writeln('<info>Running npm install...</info>');
+            $result = run('npm install', $this->path);
+
+            if (!$result->isSuccessful()) {
+                throw new WorktreeException('npm install failed', $result->getErrorOutput());
+            }
+        }
+
         foreach ($this->subprojects as $subproject) {
             $projectName = basename($subproject->path);
             $output->writeln('');
