@@ -3,7 +3,15 @@
 
 require __DIR__ . '/../vendor/autoload.php';
 
-$app = new \Osmianski\WorktreeManager\Application('Worktree Manager', '0.1.0');
+$version = '0.1.0';
+
+// Detect if running from development environment
+if (is_dir(__DIR__ . '/../.git')) {
+    $branch = trim(shell_exec('git -C ' . escapeshellarg(__DIR__ . '/..') . ' rev-parse --abbrev-ref HEAD 2>/dev/null') ?? '');
+    $version = $branch ? "dev-$branch" : 'dev';
+}
+
+$app = new \Osmianski\WorktreeManager\Application('Worktree Manager', $version);
 $app->add(new \Osmianski\WorktreeManager\Commands\AllocateCommand());
 $app->add(new \Osmianski\WorktreeManager\Commands\AllocationsCommand());
 $app->add(new \Osmianski\WorktreeManager\Commands\ConfigReservePortCommand());
