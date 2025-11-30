@@ -11,6 +11,13 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 class Application extends BaseApplication
 {
+    public function __construct(string $name = 'UNKNOWN', string $version = 'UNKNOWN')
+    {
+        parent::__construct($name, $version);
+
+        $this->setDefaultCommand('help:list');
+    }
+
     protected function configureIO(InputInterface $input, OutputInterface $output): void
     {
         parent::configureIO($input, $output);
