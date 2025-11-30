@@ -82,7 +82,7 @@ class ScanCommand extends Command
 
                     // Parse .env file
                     try {
-                        $envVars = $this->parseEnvFile($envPath);
+                        $envVars = parse_env_file($envPath);
                     }
                     catch (Exception $e) {
                         $errors[] = "Failed to parse .env in {$dir}: {$e->getMessage()}";
@@ -224,29 +224,6 @@ class ScanCommand extends Command
         }
 
         return $config;
-    }
-
-    protected function parseEnvFile(string $path): array
-    {
-        $vars = [];
-        $content = file_get_contents($path);
-        $lines = explode("\n", $content);
-
-        foreach ($lines as $line) {
-            $line = trim($line);
-
-            // Skip empty lines and comments
-            if (empty($line) || str_starts_with($line, '#')) {
-                continue;
-            }
-
-            // Parse KEY=VALUE
-            if (preg_match('/^([A-Z_][A-Z0-9_]*)=(.*)$/', $line, $matches)) {
-                $vars[$matches[1]] = $matches[2];
-            }
-        }
-
-        return $vars;
     }
 
     protected function getProjectKey(string $path): string

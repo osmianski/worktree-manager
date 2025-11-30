@@ -40,44 +40,37 @@ class AllocateCommand extends Command
             $newVars = array_diff($requestedVars, $allocatedVars);
             $removedVars = array_diff($allocatedVars, $requestedVars);
 
-            // If no changes needed, check if .env exists
-            if (empty($newVars) && empty($removedVars)) {
-                $envPath = $currentDir . '/.env';
+            // Save original allocations for display purposes
+            $originalAllocations = $existingAllocations;
 
-                if (file_exists($envPath)) {
-                    $output->writeln("<comment>Ports already allocated for {$directoryName}</comment>");
-                    $output->writeln("\nCurrent allocations:");
-                    foreach ($existingAllocations as $var => $port) {
-                        $output->writeln("  {$var}: {$port}");
+            // Refresh existing allocations from .env file if it exists
+            $envPath = $currentDir . '/.env';
+            if (file_exists($envPath)) {
+                $envVars = parse_env_file($envPath);
+                $existingAllocations = [];
+                foreach ($requestedVars as $varName) {
+                    if (isset($envVars[$varName])) {
+                        $existingAllocations[$varName] = (int)$envVars[$varName];
                     }
-                    return Command::SUCCESS;
                 }
-
-                // .env is missing, regenerate it
-                $output->writeln("<comment>Ports already allocated for {$directoryName}</comment>");
-                $output->writeln("\nCurrent allocations:");
-                foreach ($existingAllocations as $var => $port) {
-                    $output->writeln("  {$var}: {$port}");
-                }
-
-                $output->writeln("\n<info>Generating .env file...</info>");
-                generate_env_file($currentDir, $existingAllocations);
-
-                $output->writeln("<info>✓ .env file generated successfully</info>");
-                return Command::SUCCESS;
             }
+
+            // Start with existing allocations
+            $portAllocations = $existingAllocations;
+            $changed = false;
 
             // Remove ports that are no longer in config
             if (!empty($removedVars)) {
                 $output->writeln('<info>Removing obsolete port allocations...</info>');
                 foreach ($removedVars as $var) {
-                    $output->writeln("  {$var}: {$existingAllocations[$var]}");
-                    unset($existingAllocations[$var]);
+                    $output->writeln("  {$var}: {$originalAllocations[$var]}");
+                    unset($portAllocations[$var]);
+                    unset($allocations['allocations'][$directoryName][$var]);
                 }
+                $changed = true;
             }
 
             // Allocate new ports
-            $portAllocations = $existingAllocations;
             if (!empty($newVars)) {
                 $output->writeln('<info>Allocating new ports...</info>');
                 $newPortConfig = array_intersect_key(
@@ -90,17 +83,32 @@ class AllocateCommand extends Command
                     $output->writeln("  {$var}: {$port}");
                 }
 
-                // Merge with existing allocations
                 $portAllocations = array_merge($portAllocations, $newPortAllocations);
+                $changed = true;
             }
 
-            $output->writeln('<info>Generating .env file...</info>');
-            generate_env_file($currentDir, $portAllocations);
+            // Display current allocations if nothing changed
+            if (!$changed && !empty($portAllocations)) {
+                $output->writeln("<comment>Ports already allocated for {$directoryName}</comment>");
+                $output->writeln("\nCurrent allocations:");
+                foreach ($portAllocations as $var => $port) {
+                    $output->writeln("  {$var}: {$port}");
+                }
+                $output->writeln('');
+            }
 
-            $allocations['allocations'][$directoryName] = $portAllocations;
-            save_allocations($allocations);
+            // Generate .env file
+            if (!empty($portAllocations)) {
+                $output->writeln('<info>Generating .env file...</info>');
+                generate_env_file($currentDir, $portAllocations);
+            }
 
-            $output->writeln('');
+            // Save allocations if changed
+            if ($changed) {
+                $allocations['allocations'][$directoryName] = $portAllocations;
+                save_allocations($allocations);
+            }
+
             $output->writeln("<info>✓ Ports allocated successfully for: {$directoryName}</info>");
 
             return Command::SUCCESS;

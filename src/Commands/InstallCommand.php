@@ -21,33 +21,19 @@ class InstallCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         try {
-            $currentDir = getcwd();
+            $worktreeConfig = load_worktree_config(getcwd());
 
-            // 1. Check .worktree.yml for hooks/install
-            $worktreeConfig = load_worktree_config($currentDir);
-
-            if (isset($worktreeConfig['hooks']['install'])) {
-                $output->writeln('<info>Running install hook from .worktree.yml...</info>');
-                $this->runHook($worktreeConfig['hooks']['install'], $currentDir, $output);
+            // Run install hook if it exists
+            if (run_hook('install', $worktreeConfig, $output)) {
+                run_hook('post_install', $worktreeConfig, $output);
                 $output->writeln('');
                 $output->writeln('<info>✓ Installation completed successfully</info>');
                 return Command::SUCCESS;
             }
 
-            // 2. Check .worktree/hooks/install file
-            $hookPath = $currentDir . '/.worktree/hooks/install';
-
-            if (file_exists($hookPath)) {
-                $output->writeln('<info>Running install hook from .worktree/hooks/install...</info>');
-                $this->runHook($hookPath, $currentDir, $output);
-                $output->writeln('');
-                $output->writeln('<info>✓ Installation completed successfully</info>');
-                return Command::SUCCESS;
-            }
-
-            // 3. Auto-detect project type and install
+            // Auto-detect project type and install
             $output->writeln('<info>Detecting project type...</info>');
-            $project = detect_project($currentDir);
+            $project = detect_project();
 
             if (!$project) {
                 throw new WorktreeException(
@@ -63,6 +49,8 @@ class InstallCommand extends Command
             $output->writeln("<info>✓ Detected: {$projectType}</info>");
 
             $project->install($output);
+
+            run_hook('post_install', $worktreeConfig, $output);
 
             $output->writeln('');
             $output->writeln('<info>✓ All installations completed successfully</info>');
@@ -88,36 +76,6 @@ class InstallCommand extends Command
             $output->writeln('');
 
             return Command::FAILURE;
-        }
-    }
-
-    protected function runHook(mixed $hookValue, string $workingDir, OutputInterface $output): void
-    {
-        $commands = is_array($hookValue) ? $hookValue : [$hookValue];
-
-        foreach ($commands as $command) {
-            // Check if it's a file path
-            $filePath = $workingDir . '/' . $command;
-
-            if (file_exists($filePath)) {
-                // Execute as file (must be executable)
-                $output->writeln("  Executing: {$command}");
-                $process = run($filePath, $workingDir);
-            }
-            else {
-                // Execute as shell command
-                $output->writeln("  Running: {$command}");
-                $process = run($command, $workingDir);
-            }
-
-            if (!$process->isSuccessful()) {
-                throw new RuntimeException(sprintf(
-                    "Command failed with exit code %d: %s\n%s",
-                    $process->getExitCode(),
-                    $command,
-                    $process->getErrorOutput()
-                ));
-            }
         }
     }
 }

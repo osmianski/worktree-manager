@@ -38,14 +38,14 @@ class Monorepo extends Project
             }
 
             // Try detecting subproject, excluding Monorepo to prevent nesting
-            $project = detect_project($subdirPath, [self::class]);
+            $project = detect_project($subdirPath, [static::class]);
 
             if ($project !== null) {
                 $subprojects[] = $project;
             }
         }
 
-        return !empty($subprojects) ? new self($path, $subprojects) : null;
+        return !empty($subprojects) ? new static($path, $subprojects) : null;
     }
 
     public function install(OutputInterface $output): void

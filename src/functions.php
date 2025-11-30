@@ -214,8 +214,10 @@ function get_project_types(): array
     ];
 }
 
-function detect_project(string $path, array $except = []): ?Project
+function detect_project(?string $path = null, array $except = []): ?Project
 {
+    $path = $path ?? getcwd();
+
     foreach (get_project_types() as $projectType) {
         if (in_array($projectType, $except)) {
             continue;
@@ -281,4 +283,82 @@ function parse_port_range(mixed $value, string $varName = null): array
     }
 
     return ['start' => $start, 'end' => $end];
+}
+
+function parse_env_file(string $path): array
+{
+    $vars = [];
+    $content = file_get_contents($path);
+    $lines = explode("\n", $content);
+
+    foreach ($lines as $line) {
+        $line = trim($line);
+
+        // Skip empty lines and comments
+        if (empty($line) || str_starts_with($line, '#')) {
+            continue;
+        }
+
+        // Parse KEY=VALUE
+        if (preg_match('/^([A-Z_][A-Z0-9_]*)=(.*)$/', $line, $matches)) {
+            $vars[$matches[1]] = $matches[2];
+        }
+    }
+
+    return $vars;
+}
+
+function run_hook(string $hookName, array $config, OutputInterface $output): bool
+{
+    $workingDir = getcwd();
+
+    // 1. Check config for hooks/{hookName}
+    if (isset($config['hooks'][$hookName])) {
+        $output->writeln('');
+        $output->writeln("<info>Running {$hookName} hook from .worktree.yml...</info>");
+        execute_hook($config['hooks'][$hookName], $workingDir, $output);
+        return true;
+    }
+
+    // 2. Check .worktree/hooks/{hookName} file
+    $hookPath = $workingDir . '/.worktree/hooks/' . $hookName;
+
+    if (file_exists($hookPath)) {
+        $output->writeln('');
+        $output->writeln("<info>Running {$hookName} hook from .worktree/hooks/{$hookName}...</info>");
+        execute_hook($hookPath, $workingDir, $output);
+        return true;
+    }
+
+    return false;
+}
+
+function execute_hook(mixed $hookValue, string $workingDir, OutputInterface $output): void
+{
+    $commands = is_array($hookValue) ? $hookValue : [$hookValue];
+
+    foreach ($commands as $command) {
+        // Check if it's a file path
+        $filePath = $workingDir . '/' . $command;
+
+        if (file_exists($filePath)) {
+            // Execute as file (must be executable)
+            $output->writeln("  Executing: {$command}");
+            $process = run($filePath, $workingDir);
+        }
+        else {
+            // Execute as shell command
+            $output->writeln("  Running: {$command}");
+            $process = run($command, $workingDir);
+        }
+
+        if (!$process->isSuccessful()) {
+            throw new RuntimeException(sprintf(
+                "Command failed with exit code %d: %s\n%s",
+                $process->getExitCode(),
+                $command,
+                $process->getErrorOutput()
+            ));
+        }
+    }
 }
