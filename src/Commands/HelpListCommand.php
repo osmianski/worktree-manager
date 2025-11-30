@@ -1,6 +1,6 @@
 <?php
 
-namespace Osmianski\WorktreeManager;
+namespace Osmianski\WorktreeManager\Commands;
 
 use Symfony\Component\Console\Command\ListCommand;
 

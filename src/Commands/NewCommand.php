@@ -1,12 +1,13 @@
 <?php
 
-namespace Osmianski\WorktreeManager;
+namespace Osmianski\WorktreeManager\Commands;
 
 use Exception;
 use Osmianski\WorktreeManager\Exception\WorktreeException;
 use RuntimeException;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Formatter\OutputFormatterStyle;
+use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -22,6 +23,7 @@ class NewCommand extends Command
             ->setDescription('Create new worktree and environment for it')
             ->addOption('branch', 'b', InputOption::VALUE_OPTIONAL, 'Branch to checkout in worktree (if not specified, creates detached HEAD)')
             ->addOption('base', null, InputOption::VALUE_REQUIRED, 'Base branch to create worktree from', 'main')
+            ->addOption('install', 'i', InputOption::VALUE_NONE, 'Run install command in new worktree')
             ->addOption('validate-ports', null, InputOption::VALUE_NONE, 'Validate that ports are actually available via socket check')
             ->setAliases(['add']);
     }
@@ -32,6 +34,7 @@ class NewCommand extends Command
             $currentDir = getcwd();
             $branch = $input->getOption('branch');
             $base = $input->getOption('base');
+            $install = $input->getOption('install');
             $validatePorts = $input->getOption('validate-ports');
 
             $output->writeln('<info>Checking git repository...</info>');
@@ -39,9 +42,9 @@ class NewCommand extends Command
             $this->ensureBranchExists($base);
 
             $output->writeln('<info>Loading configuration...</info>');
-            $worktreesConfig = $this->loadProjectConfig($currentDir);
-            $globalConfig = $this->loadGlobalConfig();
-            $allocations = $this->loadAllocations();
+            $worktreeConfig = load_worktree_config($currentDir);
+            $globalConfig = load_global_config();
+            $allocations = load_allocations();
 
             $worktreeName = $this->generateNextWorktreeName($currentDir);
             $worktreePath = dirname($currentDir) . '/' . $worktreeName;
@@ -49,7 +52,7 @@ class NewCommand extends Command
             $this->ensureWorktreeDoesNotExist($worktreePath);
 
             $output->writeln('<info>Allocating ports...</info>');
-            $portAllocations = $this->allocatePorts($worktreesConfig, $allocations, $globalConfig, $validatePorts);
+            $portAllocations = $this->allocatePorts($worktreeConfig['environment'] ?? [], $allocations, $globalConfig, $validatePorts);
 
             foreach ($portAllocations as $var => $port) {
                 $output->writeln("  {$var}: {$port}");
@@ -59,14 +62,15 @@ class NewCommand extends Command
             $this->createWorktree($worktreePath, $base, $branch);
 
             $output->writeln('<info>Generating .env file...</info>');
-            $this->generateEnvFile($worktreePath, $portAllocations);
+            generate_env_file($worktreePath, $portAllocations);
 
             $allocations['allocations'][$worktreeName] = $portAllocations;
-            $this->saveAllocations($allocations);
+            save_allocations($allocations);
 
-            if (file_exists($installScript = $worktreePath . '/bin/install.sh')) {
-                $output->writeln('<info>Running install script...</info>');
-                $this->runInstallScript($installScript, $output);
+            if ($install) {
+                $output->writeln('');
+                $output->writeln('<info>Running install...</info>');
+                $this->runInstallCommand($worktreePath, $output);
             }
 
             $output->writeln('');
@@ -83,163 +87,6 @@ class NewCommand extends Command
 
             return Command::FAILURE;
         }
-    }
-
-    protected function getConfigPath(): string
-    {
-        return get_home_directory() . '/.config/worktree-manager/config.yml';
-    }
-
-    protected function loadProjectConfig(string $dir): array
-    {
-        $filename = '.worktree.yml';
-        $configPath = "{$dir}/{$filename}";
-
-        if (!file_exists($configPath)) {
-            throw new WorktreeException(
-                sprintf("%s not found in %s", $filename, $dir),
-                sprintf(
-                    "Please create a %s file with port configuration.\n\nExample:\nenvironment:\n  HTTP_PORT:\n    port_range: \"8000..\"\n  VITE_PORT:\n    port_range: \"5173..\"",
-                    $filename,
-                ));
-        }
-
-        try {
-            $config = Yaml::parseFile($configPath);
-        }
-        catch (Exception $e) {
-            throw new WorktreeException(sprintf(
-                "Invalid YAML syntax in worktrees.yml: %s",
-                $e->getMessage()
-            ));
-        }
-
-        // Extract environment section if present
-        if (isset($config['environment']) && is_array($config['environment'])) {
-            $config = $config['environment'];
-        }
-
-        $this->validateProjectConfig($config);
-        return $config;
-    }
-
-    protected function loadGlobalConfig(): array
-    {
-        $configPath = $this->getConfigPath();
-
-        if (!file_exists($configPath)) {
-            // Create default config
-            $defaultConfig = ['reserved_ports' => []];
-            $this->createDirectoryIfNotExists(dirname($configPath));
-            file_put_contents(
-                $configPath,
-                Yaml::dump($defaultConfig, 2, 2)
-            );
-            return $defaultConfig;
-        }
-
-        try {
-            $config = Yaml::parseFile($configPath);
-            return $config ?? ['reserved_ports' => []];
-        }
-        catch (Exception $e) {
-            throw new WorktreeException(sprintf(
-                "Invalid YAML syntax in config.yml: %s",
-                $e->getMessage()
-            ));
-        }
-    }
-
-    protected function validateProjectConfig(array $config): void
-    {
-        if (empty($config)) {
-            throw new WorktreeException('worktrees.yml is empty');
-        }
-
-        foreach ($config as $varName => $varConfig) {
-            if (!is_array($varConfig) || !isset($varConfig['port_range'])) {
-                throw new WorktreeException(sprintf(
-                    "Invalid configuration for %s: expected 'port_range' key\n\nExample:\nenvironment:\n  %s:\n    port_range: \"8000..\"",
-                    $varName,
-                    $varName
-                ));
-            }
-
-            // Validate port range format
-            $this->parsePortRange($varConfig['port_range'], $varName);
-        }
-    }
-
-    protected function parsePortRange(mixed $value, string $varName = null): array
-    {
-        if (!is_string($value)) {
-            throw new WorktreeException(sprintf(
-                "Invalid port range for %s: must be a string in format \"8000..\" or \"8000..9000\"",
-                $varName ?? 'port'
-            ));
-        }
-
-        if (!preg_match('/^(\d+)\.\.(\d*)$/', $value, $matches)) {
-            throw new WorktreeException(sprintf(
-                "Invalid port range format for %s: expected \"number..\" or \"number..number\", got \"%s\"",
-                $varName ?? 'port',
-                $value
-            ));
-        }
-
-        $start = (int)$matches[1];
-        $end = $matches[2] !== '' ? (int)$matches[2] : null;
-
-        if ($start < 1024 || $start > 65535) {
-            throw new WorktreeException(sprintf(
-                "Port range start must be between 1024 and 65535, got %d",
-                $start
-            ));
-        }
-
-        if ($end !== null && ($end < $start || $end > 65535)) {
-            throw new WorktreeException(sprintf(
-                "Port range end must be between %d and 65535, got %d",
-                $start,
-                $end
-            ));
-        }
-
-        return ['start' => $start, 'end' => $end];
-    }
-
-    protected function loadAllocations(): array
-    {
-        $allocationsPath = get_allocations_path();
-
-        if (!file_exists($allocationsPath)) {
-            return ['allocations' => []];
-        }
-
-        $json = file_get_contents($allocationsPath);
-        $allocations = json_decode($json, true);
-
-        if ($allocations === null) {
-            throw new WorktreeException(sprintf(
-                "Invalid JSON in allocations.json: %s",
-                json_last_error_msg()
-            ));
-        }
-
-        return $allocations;
-    }
-
-    protected function saveAllocations(array $allocations): void
-    {
-        $allocationsPath = get_allocations_path();
-        $this->createDirectoryIfNotExists(dirname($allocationsPath));
-
-        $json = json_encode($allocations, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-
-        // Atomic write: write to temp file, then rename
-        $tempPath = $allocationsPath . '.tmp';
-        file_put_contents($tempPath, $json);
-        rename($tempPath, $allocationsPath);
     }
 
     protected function getAllocatedPorts(array $allocations): array
@@ -297,7 +144,7 @@ class NewCommand extends Command
         $portAllocations = [];
 
         foreach ($config as $varName => $varConfig) {
-            $range = $this->parsePortRange($varConfig['port_range'], $varName);
+            $range = parse_port_range($varConfig['port_range'], $varName);
 
             $port = $this->findNextAvailablePort(
                 $range['start'],
@@ -441,39 +288,23 @@ class NewCommand extends Command
         }
     }
 
-    protected function generateEnvFile(string $path, array $ports): void
+    protected function runInstallCommand(string $worktreePath, OutputInterface $output): void
     {
-        $lines = [];
-        foreach ($ports as $var => $port) {
-            $lines[] = "{$var}={$port}";
+        $currentDir = getcwd();
+        chdir($worktreePath);
+
+        try {
+            $exitCode = $this->getApplication()->find('install')->run(new ArrayInput([]), $output);
+
+            if ($exitCode !== Command::SUCCESS) {
+                throw new WorktreeException(
+                    'Install command failed',
+                    "You may need to run it manually:\n  cd {$worktreePath}\n  worktree install"
+                );
+            }
         }
-
-        $content = implode("\n", $lines) . "\n";
-        $envPath = $path . '/.env';
-
-        // Atomic write
-        $tempPath = $envPath . '.tmp';
-        file_put_contents($tempPath, $content);
-        rename($tempPath, $envPath);
-    }
-
-    protected function createDirectoryIfNotExists(string $path): void
-    {
-        if (!is_dir($path)) {
-            mkdir($path, 0755, true);
-        }
-    }
-
-    protected function runInstallScript(string $scriptPath, OutputInterface $output): void
-    {
-        $workingDir = dirname($scriptPath);
-
-        $process = run_script($output, 'bash bin/install.sh', $workingDir);
-
-        if (!$process->isSuccessful()) {
-            $exitCode = $process->getExitCode();
-            $output->writeln("<comment>Warning: install.sh exited with code {$exitCode}</comment>");
-            $output->writeln("You may need to run it manually:\n  cd {$workingDir}\n  bash bin/install.sh");
+        finally {
+            chdir($currentDir);
         }
     }
 }

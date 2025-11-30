@@ -1,6 +1,6 @@
 <?php
 
-namespace Osmianski\WorktreeManager;
+namespace Osmianski\WorktreeManager\Commands;
 
 use Exception;
 use Osmianski\WorktreeManager\Exception\WorktreeException;

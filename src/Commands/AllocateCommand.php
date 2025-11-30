@@ -1,6 +1,6 @@
 <?php
 
-namespace Osmianski\WorktreeManager;
+namespace Osmianski\WorktreeManager\Commands;
 
 use Exception;
 use Osmianski\WorktreeManager\Exception\WorktreeException;
@@ -25,7 +25,7 @@ class AllocateCommand extends Command
             $currentDir = getcwd();
 
             $output->writeln('<info>Loading configuration...</info>');
-            $worktreesConfig = $this->loadProjectConfig($currentDir);
+            $worktreeConfig = load_worktree_config($currentDir);
             $globalConfig = load_global_config();
             $allocations = load_allocations();
 
@@ -42,14 +42,14 @@ class AllocateCommand extends Command
             }
 
             $output->writeln('<info>Allocating ports...</info>');
-            $portAllocations = $this->allocatePorts($worktreesConfig, $allocations, $globalConfig);
+            $portAllocations = $this->allocatePorts($worktreeConfig['environment'] ?? [], $allocations, $globalConfig);
 
             foreach ($portAllocations as $var => $port) {
                 $output->writeln("  {$var}: {$port}");
             }
 
             $output->writeln('<info>Generating .env file...</info>');
-            $this->generateEnvFile($currentDir, $portAllocations);
+            generate_env_file($currentDir, $portAllocations);
 
             $allocations['allocations'][$directoryName] = $portAllocations;
             save_allocations($allocations);
@@ -68,97 +68,6 @@ class AllocateCommand extends Command
 
             return Command::FAILURE;
         }
-    }
-
-    protected function loadProjectConfig(string $dir): array
-    {
-        $filename = '.worktree.yml';
-        $configPath = "{$dir}/{$filename}";
-
-        if (!file_exists($configPath)) {
-            throw new WorktreeException(
-                sprintf("%s not found in %s", $filename, $dir),
-                sprintf(
-                    "Please create a %s file with port configuration.\n\nExample:\nenvironment:\n  HTTP_PORT:\n    port_range: \"8000..\"\n  VITE_PORT:\n    port_range: \"5173..\"",
-                    $filename,
-                ));
-        }
-
-        try {
-            $config = Yaml::parseFile($configPath);
-        }
-        catch (Exception $e) {
-            throw new WorktreeException(sprintf(
-                "Invalid YAML syntax in .worktree.yml: %s",
-                $e->getMessage()
-            ));
-        }
-
-        // Extract environment section if present
-        if (isset($config['environment']) && is_array($config['environment'])) {
-            $config = $config['environment'];
-        }
-
-        $this->validateProjectConfig($config);
-        return $config;
-    }
-
-    protected function validateProjectConfig(array $config): void
-    {
-        if (empty($config)) {
-            throw new WorktreeException('.worktree.yml is empty');
-        }
-
-        foreach ($config as $varName => $varConfig) {
-            if (!is_array($varConfig) || !isset($varConfig['port_range'])) {
-                throw new WorktreeException(sprintf(
-                    "Invalid configuration for %s: expected 'port_range' key\n\nExample:\nenvironment:\n  %s:\n    port_range: \"8000..\"",
-                    $varName,
-                    $varName
-                ));
-            }
-
-            // Validate port range format
-            $this->parsePortRange($varConfig['port_range'], $varName);
-        }
-    }
-
-    protected function parsePortRange(mixed $value, string $varName = null): array
-    {
-        if (!is_string($value)) {
-            throw new WorktreeException(sprintf(
-                "Invalid port range for %s: must be a string in format \"8000..\" or \"8000..9000\"",
-                $varName ?? 'port'
-            ));
-        }
-
-        if (!preg_match('/^(\d+)\.\.(\d*)$/', $value, $matches)) {
-            throw new WorktreeException(sprintf(
-                "Invalid port range format for %s: expected \"number..\" or \"number..number\", got \"%s\"",
-                $varName ?? 'port',
-                $value
-            ));
-        }
-
-        $start = (int)$matches[1];
-        $end = $matches[2] !== '' ? (int)$matches[2] : null;
-
-        if ($start < 1024 || $start > 65535) {
-            throw new WorktreeException(sprintf(
-                "Port range start must be between 1024 and 65535, got %d",
-                $start
-            ));
-        }
-
-        if ($end !== null && ($end < $start || $end > 65535)) {
-            throw new WorktreeException(sprintf(
-                "Port range end must be between %d and 65535, got %d",
-                $start,
-                $end
-            ));
-        }
-
-        return ['start' => $start, 'end' => $end];
     }
 
     protected function getAllocatedPorts(array $allocations): array
@@ -216,7 +125,7 @@ class AllocateCommand extends Command
         $portAllocations = [];
 
         foreach ($config as $varName => $varConfig) {
-            $range = $this->parsePortRange($varConfig['port_range'], $varName);
+            $range = parse_port_range($varConfig['port_range'], $varName);
 
             $port = $this->findNextAvailablePort(
                 $range['start'],
@@ -253,21 +162,5 @@ class AllocateCommand extends Command
         }
 
         return null;
-    }
-
-    protected function generateEnvFile(string $path, array $ports): void
-    {
-        $lines = [];
-        foreach ($ports as $var => $port) {
-            $lines[] = "{$var}={$port}";
-        }
-
-        $content = implode("\n", $lines) . "\n";
-        $envPath = $path . '/.env';
-
-        // Atomic write
-        $tempPath = $envPath . '.tmp';
-        file_put_contents($tempPath, $content);
-        rename($tempPath, $envPath);
     }
 }

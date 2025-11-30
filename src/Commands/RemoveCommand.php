@@ -1,6 +1,6 @@
 <?php
 
-namespace Osmianski\WorktreeManager;
+namespace Osmianski\WorktreeManager\Commands;
 
 use Osmianski\WorktreeManager\Exception\WorktreeException;
 use Symfony\Component\Console\Command\Command;
