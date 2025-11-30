@@ -28,9 +28,6 @@ class NewCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         try {
-            // See https://www.ditig.com/256-colors-cheat-sheet for supported colors
-            $output->getFormatter()->setStyle('error', new OutputFormatterStyle('white', '#5F0000'));
-
             $currentDir = getcwd();
             $branch = $input->getOption('branch');
             $base = $input->getOption('base');

@@ -3,9 +3,7 @@
 
 require __DIR__ . '/../vendor/autoload.php';
 
-use Symfony\Component\Console\Application;
-
-$app = new Application('Worktree Manager', '0.1.0');
+$app = new \Osmianski\WorktreeManager\Application('Worktree Manager', '0.1.0');
 $app->add(new \Osmianski\WorktreeManager\NewCommand());
 $app->add(new \Osmianski\WorktreeManager\ListCommand());
 $app->add(new \Osmianski\WorktreeManager\RemoveCommand());
