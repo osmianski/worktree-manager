@@ -4,23 +4,31 @@ This tool automates it: create worktrees with fully working environments in seco
 
 ## Installation
 
-Install globally via Composer:
+**Requirements:** PHP 8.1 or higher
 
-```bash
-composer global require osmianski/worktree-manager
-```
+1. Install globally via Composer:
 
-Make sure Composer's global bin directory is in your PATH. Add this to your `~/.bashrc` or `~/.zshrc`:
+    ```bash
+    composer global require osmianski/worktree-manager
+    ```
 
-```bash
-export PATH="$HOME/.config/composer/vendor/bin:$PATH"
-```
+2. Make sure Composer's global `bin` directory is in your PATH. The location varies by system:
 
-Updating to the latest version:
+    ```bash
+    # Most Linux systems
+    export PATH="$HOME/.config/composer/vendor/bin:$PATH"
 
-```bash
-composer global update osmianski/worktree-manager
-```
+    # Or on some systems
+    export PATH="$HOME/.composer/vendor/bin:$PATH"
+    ```
+
+    Add the appropriate line to your `~/.bashrc` or `~/.zshrc`.
+
+3. Verify the installation:
+
+    ```bash
+    worktree --version
+    ```
 
 ## Usage
 
