@@ -414,3 +414,55 @@ function run_migrations($application, OutputInterface $output, ?string $worktree
         }
     }
 }
+
+function run_up($application, OutputInterface $output, ?string $worktreePath = null): void
+{
+    $currentDir = $worktreePath ? getcwd() : null;
+
+    if ($worktreePath) {
+        chdir($worktreePath);
+    }
+
+    try {
+        $exitCode = $application->find('up')->run(new Symfony\Component\Console\Input\ArrayInput([]), $output);
+
+        if ($exitCode !== 0) {
+            $errorPath = $worktreePath ?? getcwd();
+            throw new WorktreeException(
+                'Up command failed',
+                "You may need to run it manually:\n  cd {$errorPath}\n  worktree up"
+            );
+        }
+    }
+    finally {
+        if ($currentDir) {
+            chdir($currentDir);
+        }
+    }
+}
+
+function run_down($application, OutputInterface $output, ?string $worktreePath = null): void
+{
+    $currentDir = $worktreePath ? getcwd() : null;
+
+    if ($worktreePath) {
+        chdir($worktreePath);
+    }
+
+    try {
+        $exitCode = $application->find('down')->run(new Symfony\Component\Console\Input\ArrayInput([]), $output);
+
+        if ($exitCode !== 0) {
+            $errorPath = $worktreePath ?? getcwd();
+            throw new WorktreeException(
+                'Down command failed',
+                "You may need to run it manually:\n  cd {$errorPath}\n  worktree down"
+            );
+        }
+    }
+    finally {
+        if ($currentDir) {
+            chdir($currentDir);
+        }
+    }
+}

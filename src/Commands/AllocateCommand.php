@@ -26,6 +26,7 @@ class AllocateCommand extends Command
                 'Port assignments in the format VAR_NAME=PORT (e.g., DB_PORT=33060 REDIS_PORT=6379)'
             )
             ->addOption('install', 'i', InputOption::VALUE_NONE, 'Run install command after allocating ports')
+            ->addOption('up', 'u', InputOption::VALUE_NONE, 'Restart Docker containers after allocating ports')
             ->addOption('migrate', 'm', InputOption::VALUE_NONE, 'Run migrate command after allocating ports');
     }
 
@@ -164,6 +165,14 @@ class AllocateCommand extends Command
                 $output->writeln('');
                 $output->writeln('<info>Running install...</info>');
                 run_install($this->getApplication(), $output);
+            }
+
+            // Restart Docker containers if requested
+            if ($input->getOption('up')) {
+                $output->writeln('');
+                $output->writeln('<info>Restarting Docker containers...</info>');
+                run_down($this->getApplication(), $output);
+                run_up($this->getApplication(), $output);
             }
 
             // Run migrate command if requested
