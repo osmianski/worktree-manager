@@ -49,6 +49,9 @@ class RemoveCommand extends Command
 
             $output->writeln("<info>Removing worktree: {$worktreeName}</info>");
 
+            // Check if Docker containers exist and destroy them
+            $this->cleanupDockerContainers($worktreePath, $output);
+
             $force = $input->getOption('force');
             $command = $force ? "git worktree remove --force {$worktreePath}" : "git worktree remove {$worktreePath}";
             $result = run($command);
@@ -92,6 +95,44 @@ class RemoveCommand extends Command
         catch (WorktreeException $e) {
             $output->writeln("<error>ERROR</error> {$e->getMessage()}");
             return Command::FAILURE;
+        }
+    }
+
+    protected function cleanupDockerContainers(string $worktreePath, OutputInterface $output): void
+    {
+        // Check if docker-compose.yml exists
+        if (!file_exists($worktreePath . '/docker-compose.yml')) {
+            return;
+        }
+
+        // Check if any containers exist
+        $process = run('docker compose ps --format json', $worktreePath);
+
+        if (!$process->isSuccessful()) {
+            // Can't check for containers, skip cleanup
+            return;
+        }
+
+        $containers = array_filter(
+            explode("\n", trim($process->getOutput())),
+            fn($line) => !empty($line)
+        );
+
+        if (empty($containers)) {
+            // No containers to clean up
+            return;
+        }
+
+        $output->writeln("<info>Stopping and removing Docker containers...</info>");
+
+        // Run docker compose down with -v to remove volumes as well
+        $downProcess = run_script($output, 'docker compose down -v', $worktreePath);
+
+        if (!$downProcess->isSuccessful()) {
+            $output->writeln(sprintf(
+                "<comment>Warning: Failed to stop Docker containers (exit code %d)</comment>",
+                $downProcess->getExitCode()
+            ));
         }
     }
 
