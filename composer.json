@@ -1,6 +1,6 @@
 {
     "name": "osmianski/worktree-manager",
-    "description": "Need to maintain multiple working branches simultaneously - whether for long-term parallel development or running AI agents in separate worktrees? Setting up each environment is tedious. This tool creates worktrees with fully working environments in seconds with automatically allocates ports, installed dependencies, Docker containers and migrations.",
+    "description": "Need to maintain multiple working branches simultaneously - whether for long-term parallel development or running AI agents in separate worktrees? Setting up each environment is tedious. This tool creates worktrees with fully working environments in seconds.",
     "type": "library",
     "license": "MIT",
     "require": {
