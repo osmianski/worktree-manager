@@ -233,18 +233,48 @@ function detect_project(?string $path = null, array $except = []): ?Project
 
 function generate_env_file(string $path, array $ports): void
 {
-    $lines = [];
+    $envPath = $path . '/.env';
+    $examplePath = $path . '/.env.example';
+
+    // If .env.example exists, use it as template
+    if (file_exists($examplePath)) {
+        $content = file_get_contents($examplePath);
+        $lines = explode("\n", $content);
+
+        // Update existing variables
+        foreach ($lines as &$line) {
+            $trimmed = trim($line);
+
+            // Skip empty lines and comments
+            if (empty($trimmed) || str_starts_with($trimmed, '#')) {
+                continue;
+            }
+
+            // Parse KEY=VALUE
+            if (preg_match('/^([A-Z_][A-Z0-9_]*)=/', $line, $matches)) {
+                $varName = $matches[1];
+
+                if (isset($ports[$varName])) {
+                    $line = "{$varName}={$ports[$varName]}";
+                    unset($ports[$varName]);
+                }
+            }
+        }
+        unset($line);
+    }
+    else {
+        // No .env.example, create from scratch
+        $lines = [];
+    }
+
     foreach ($ports as $var => $port) {
         $lines[] = "{$var}={$port}";
     }
 
     $content = implode("\n", $lines) . "\n";
-    $envPath = $path . '/.env';
 
     // Atomic write
-    $tempPath = $envPath . '.tmp';
-    file_put_contents($tempPath, $content);
-    rename($tempPath, $envPath);
+    file_put_contents($envPath, $content);
 }
 
 function parse_port_range(mixed $value, string $varName = null): array
